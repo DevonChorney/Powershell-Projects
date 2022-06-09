@@ -6,6 +6,9 @@ $RefreshToken = 'RefreshToken'
 ### PartnerCenter and MSOnline Powershell modules are required
 
 
+#Set days until expiration
+$days = 30
+
 write-host "Creating credentials and tokens." -ForegroundColor Green
 
 $credential = New-Object System.Management.Automation.PSCredential($ApplicationId, $ApplicationSecret)
