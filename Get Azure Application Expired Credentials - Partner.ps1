@@ -3,6 +3,9 @@ $ApplicationId = 'ApplicationID'
 $ApplicationSecret = 'ApplicationSecret'  | ConvertTo-SecureString -Force -AsPlainText
 $RefreshToken = 'RefreshToken'
 ######### Secrets #########
+### PartnerCenter and MSOnline Powershell modules are required
+
+
 write-host "Creating credentials and tokens." -ForegroundColor Green
 
 $credential = New-Object System.Management.Automation.PSCredential($ApplicationId, $ApplicationSecret)
