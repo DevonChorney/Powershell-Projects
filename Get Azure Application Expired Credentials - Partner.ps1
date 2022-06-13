@@ -42,6 +42,6 @@ foreach ($app in $apps){
     
 
 if($Expirations -ne $null){
-write-host "One of the application proxies is not active. See results"}
+write-host "One of the application Secrets is expired or will expire soon. See results"}
 $Expirations
 
