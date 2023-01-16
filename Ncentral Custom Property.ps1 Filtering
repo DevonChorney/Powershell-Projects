@@ -1,0 +1,165 @@
+$JWT = "Insert JWT Token"
+$Site = "Enter Site without http"
+$CDP = "Enter CDP Property"
+function Get-NCenClientList {
+$MySoapRequest =(@"
+<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:ei2="http://ei2.nobj.nable.com/">
+	<soap:Header/>
+	<soap:Body>
+		<ei2:customerListChildren>
+			<ei2:username></ei2:username>
+			<ei2:password>$JWT</ei2:password>
+			<ei2:settings>
+				<ei2:key>customerID</ei2:key>
+				<ei2:value>50</ei2:value>
+			</ei2:settings>
+		</ei2:customerListChildren>
+	</soap:Body>
+</soap:Envelope>
+"@)
+
+## Set the Request-properties in a local Dictionary / Hash-table.
+$RequestProps = @{}
+$RequestProps.Method = "Post"
+$RequestProps.Uri = "$site/dms2/services2/ServerEI2?wsdl HTTP/1.1"
+$RequestProps.TimeoutSec = 10
+$RequestProps.body =  $MySoapRequest
+
+$FullResponse = Invoke-RestMethod @RequestProps
+
+$Names = $FullResponse.Envelope.body.customerListChildrenResponse.return.items | where-object key -eq "customer.customername" | Select-Object -ExpandProperty value
+$IDs = $FullResponse.Envelope.body.customerListChildrenResponse.return.items | where-object key -eq "customer.customerid" | select-object -ExpandProperty value
+
+
+[int]$max = $Names.count
+$CustomerList = for ($i = 0; $i -lt $max; $i ++)
+{
+[pscustomobject]@{
+    customername = $Names[$i]
+    customerid = $IDs[$i]
+}
+}
+$CustomerList
+}
+
+function Get-NCenDeviceIDList {
+    param (
+        $CustomerID
+    )
+    $MySoapRequest =(@"
+<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:ei2="http://ei2.nobj.nable.com/">
+	<soap:Header/>
+	<soap:Body>
+		<ei2:deviceList>
+			<ei2:username></ei2:username>
+			<ei2:password>$JWT</ei2:password>
+            <ei2:settings>
+            <ei2:key>customerID</ei2:key>
+            <ei2:value>$CustomerID</ei2:value>
+        </ei2:settings>
+        <ei2:settings>
+            <ei2:key>devices</ei2:key>
+            <ei2:value>True</ei2:value>
+        </ei2:settings>
+        <ei2:settings>
+            <ei2:key>probes</ei2:key>
+            <ei2:value>False</ei2:value>
+        </ei2:settings>
+		</ei2:deviceList>
+	</soap:Body>
+</soap:Envelope>
+"@)
+
+## Set the Request-properties in a local Dictionary / Hash-table.
+$RequestProps = @{}
+$RequestProps.Method = "Post"
+$RequestProps.Uri = "$site/dms2/services2/ServerEI2?wsdl HTTP/1.1"
+$RequestProps.TimeoutSec = 10
+$RequestProps.body =  $MySoapRequest
+
+$DeviceListResponse = Invoke-RestMethod @RequestProps
+$IDs = $DeviceListResponse.Envelope.Body.deviceListResponse.return.items | where-object key -eq "device.deviceid" | select-object -ExpandProperty value
+$IDs
+}
+
+
+Function Get-NCenDeviceReport {
+Param ($DeviceIDs, $CDP)
+$SoapDeviceIDS = $DeviceIDs | ForEach-Object {"<ei2:value>$_</ei2:value>"}
+    $MySoapRequest =(@"
+<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:ei2="http://ei2.nobj.nable.com/">
+	<soap:Header/>
+	<soap:Body>
+		<ei2:deviceAssetInfoExportDeviceWithSettings>
+					    <ei2:version>0.0</ei2:version>
+			<ei2:username></ei2:username>
+			<ei2:password>$JWT</ei2:password>
+            <ei2:settings>
+            <ei2:key>TargetByDeviceID</ei2:key>
+$SoapDeviceIDS
+            </ei2:settings>
+            <ei2:settings>
+            <ei2:key>InformationCategoriesInclusion</ei2:key>
+            <ei2:value>asset.os</ei2:value>
+            <ei2:value>asset.customer</ei2:value>
+            <ei2:value>asset.device</ei2:value>
+        </ei2:settings>
+		</ei2:deviceAssetInfoExportDeviceWithSettings>
+	</soap:Body>
+</soap:Envelope>
+"@)
+
+## Set the Request-properties in a local Dictionary / Hash-table.
+$RequestProps = @{}
+$RequestProps.Method = "Post"
+$RequestProps.Uri = "$Site/dms2/services2/ServerEI2?wsdl HTTP/1.1"
+$RequestProps.TimeoutSec = 10
+$RequestProps.body =  $MySoapRequest
+
+$HardwareResponse = Invoke-RestMethod @RequestProps
+
+####Build CDP
+$SoapDeviceIDS = $DeviceIDs | ForEach-Object {"<ei2:deviceIDs>$_</ei2:deviceIDs>"}
+    $MySoapRequest =(@"
+<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope" xmlns:ei2="http://ei2.nobj.nable.com/">
+	<soap:Header/>
+	<soap:Body>
+		<ei2:devicePropertyList>
+			<ei2:username></ei2:username>
+			<ei2:password>$JWT</ei2:password>
+$SoapDeviceIDS
+<ei2:reverseOrder>false</ei2:reverseOrder>
+		</ei2:devicePropertyList>
+	</soap:Body>
+</soap:Envelope>
+"@)
+
+## Set the Request-properties in a local Dictionary / Hash-table.
+$RequestProps = @{}
+$RequestProps.Method = "Post"
+$RequestProps.Uri = "$site/dms2/services2/ServerEI2?wsdl HTTP/1.1"
+$RequestProps.TimeoutSec = 10
+$RequestProps.body =  $MySoapRequest
+
+$CDPResponse = Invoke-RestMethod @RequestProps
+$CDPlist = $CDPResponse.Envelope.Body.devicePropertyListResponse.return
+
+$HardwareDevices = @()
+    foreach ($return in $($HardwareResponse.Envelope.Body.deviceAssetInfoExportDeviceWithSettingsResponse.return)) {
+    if (($return.items | where-object key -match "asset.device.deviceclass" | select-object -ExpandProperty value) -match "Windows"){
+    $CDPdevice = $CDPList | where-object deviceID -eq ($return.items | where-object key -match "asset.device.deviceid" | select-object -ExpandProperty value)
+         $HardwareDevices +=               [PSCustomObject]@{
+                        'DeviceID'     = $return.items | where-object key -match "asset.device.deviceid" | select-object -ExpandProperty value
+                        'Customer name'     = $return.items | where-object key -match "asset.customer.customername" | select-object -ExpandProperty value
+                        'Device name'       = $return.items | where-object key -match "asset.device.longname" | select-object -ExpandProperty value
+                        'OS'         = $return.items | where-object key -match "asset.os.reportedos" | select-object -ExpandProperty value
+                        $CDP         = $CDPDevice.properties | where-object label -match $CDP | select-object -ExpandProperty value
+                        }
+                    }
+                    }
+$HardwareDevices   
+                }
+
+$customers = Get-NCenClientList | Out-GridView -PassThru -Title "Select Customer"
+$customerDeviceIDs = Get-NCenDeviceIDList -CustomerID $Customers.customerId
+$Devices = Get-NCenDeviceReport -DeviceIDs $customerDeviceIDs -CDP $CDP
